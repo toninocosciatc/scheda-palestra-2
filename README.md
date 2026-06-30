@@ -1,28 +1,32 @@
-# Scheda Palestra PWA
+# Scheda Palestra PWA — Versione 2
 
-PWA personale per tracciare la scheda palestra divisa in:
-- Giorno A — Upper 1
-- Giorno B — Upper 2
-- Giorno C — Lower
-- Giorno D — Delts focus
+Versione aggiornata della PWA personale.
 
-## Funzioni
-- Inserimento rapido di ripetizioni e peso per ogni serie.
-- Stanchezza da 1 a 5 per ogni esercizio.
-- Note veloci per esercizio.
-- Salvataggio automatico sul telefono tramite localStorage.
-- Storico degli allenamenti.
-- Funzionamento offline dopo il primo caricamento.
-- Installabile sulla schermata Home.
+## Novità
+- Esercizi in menu a tendina/fisarmonica per avere subito la panoramica del giorno.
+- Per ogni esercizio vedi l'ultima volta salvata: carico top, ripetizioni, fatica e data.
+- Confronto rapido con la volta precedente tramite progressione peso top.
+- Volume totale del giorno e confronto con l'ultimo allenamento dello stesso giorno.
+- Rating fatica colorato da 1 a 5.
+- Storico allenamenti migliorato.
 
-## Come caricarla su GitHub Pages
-1. Crea un repository pubblico su GitHub.
-2. Carica tutti questi file nella root del repository.
-3. Vai su Settings > Pages.
-4. Seleziona: Deploy from branch > main > /root.
-5. Apri il link generato da GitHub Pages.
-6. Dal telefono aggiungi alla schermata Home.
+## Compatibilità dati
+La chiave di salvataggio è rimasta `scheda-palestra-v1`, quindi i dati già salvati dalla prima versione non vengono cancellati.
 
-## Nota privacy
-I dati degli allenamenti vengono salvati nel browser del telefono, non su GitHub.
-Non cancellare dati del sito/browser se vuoi conservarli.
+## Come aggiornare su GitHub
+1. Apri il tuo repository GitHub.
+2. Clicca `Add file` > `Upload files`.
+3. Carica questi file sovrascrivendo quelli esistenti:
+   - index.html
+   - style.css
+   - app.js
+   - manifest.json
+   - service-worker.js
+   - icon-192.png
+   - icon-512.png
+   - README.md
+4. Clicca `Commit changes`.
+5. Riapri l'app dal telefono. Se non vedi subito le modifiche, chiudi e riapri l'app o ricarica la pagina dal browser.
+
+## Nota
+I dati vengono salvati nel browser del telefono tramite localStorage.

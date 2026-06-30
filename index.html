@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#111111" />
-  <meta name="description" content="Scheda palestra personale con progressi, menu esercizi e rating fatica." />
+  <meta name="description" content="Scheda palestra personale con progressi, storico esercizi e rating fatica a cursore." />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="stylesheet" href="style.css" />
@@ -26,7 +26,7 @@
         <input id="workoutDate" class="date-input" type="date" />
       </div>
       <div class="summary">
-        <span id="savedCount">0 esercizi salvati</span>
+        <span id="savedCount">0 salvati</span>
       </div>
     </section>
 
@@ -34,9 +34,19 @@
 
     <section id="dayHeader" class="day-header"></section>
 
-    <section class="quick-tools">
-      <button id="openAllBtn" class="secondary-btn compact" type="button">Apri tutti</button>
-      <button id="closeAllBtn" class="secondary-btn compact" type="button">Chiudi tutti</button>
+    <section class="quick-tools" aria-label="Azioni rapide">
+      <button id="openAllBtn" class="icon-btn" type="button" aria-label="Apri tutti gli esercizi" title="Apri tutti">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 10l5 5 5-5" />
+          <path d="M7 5l5 5 5-5" />
+        </svg>
+      </button>
+      <button id="closeAllBtn" class="icon-btn" type="button" aria-label="Chiudi tutti gli esercizi" title="Chiudi tutti">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 14l5-5 5 5" />
+          <path d="M7 19l5-5 5 5" />
+        </svg>
+      </button>
     </section>
 
     <section id="exerciseList" class="exercise-list"></section>
@@ -44,14 +54,6 @@
     <section class="actions">
       <button id="saveAllBtn" class="primary-btn" type="button">Salva allenamento</button>
       <button id="clearDayBtn" class="secondary-btn" type="button">Svuota giorno</button>
-    </section>
-
-    <section class="history-panel">
-      <button id="toggleHistoryBtn" class="history-toggle" type="button">
-        Storico allenamenti
-        <span>Apri</span>
-      </button>
-      <div id="historyContent" class="history-content hidden"></div>
     </section>
   </main>
 

@@ -1,7 +1,7 @@
 {
   "name": "Scheda Palestra",
   "short_name": "Palestra",
-  "description": "Scheda palestra personale con progressi, menu esercizi e rating fatica.",
+  "description": "Scheda palestra personale con storico esercizi e cursore fatica.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

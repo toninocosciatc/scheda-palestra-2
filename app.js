@@ -56,6 +56,7 @@ const $ = (selector) => document.querySelector(selector);
 
 let activeDay = "A";
 let deferredPrompt = null;
+let expandedHistory = {};
 
 const tabsEl = $("#dayTabs");
 const headerEl = $("#dayHeader");
@@ -84,6 +85,10 @@ function saveStorage(data) {
 
 function currentKey() {
   return `${dateEl.value}__${activeDay}`;
+}
+
+function historyKey(exerciseIndex) {
+  return `${activeDay}_${exerciseIndex}`;
 }
 
 function getWorkout(date = dateEl.value, day = activeDay) {
@@ -146,11 +151,6 @@ function formatKg(value) {
   return `${Number.isInteger(value) ? value : value.toFixed(1).replace(".", ",")} kg`;
 }
 
-function formatVolume(value) {
-  if (!value) return "—";
-  return `${Math.round(value).toLocaleString("it-IT")} kg`;
-}
-
 function formatDate(iso) {
   try {
     return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${iso}T00:00:00`));
@@ -165,67 +165,36 @@ function getAllWorkouts() {
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 
+function getExerciseHistory(exerciseIndex, exerciseName) {
+  const selectedDate = dateEl.value;
+
+  return getAllWorkouts()
+    .filter(entry => entry.date < selectedDate)
+    .map(entry => {
+      let exercise = null;
+
+      if (entry.day === activeDay && entry.exercises?.[exerciseIndex]) {
+        exercise = entry.exercises[exerciseIndex];
+      }
+
+      if (!exercise) {
+        exercise = Object.values(entry.exercises || {}).find(ex => ex?.name === exerciseName) || null;
+      }
+
+      if (!exercise) return null;
+
+      return {
+        date: entry.date,
+        day: entry.day,
+        exercise,
+        stats: getExerciseStats(exercise)
+      };
+    })
+    .filter(Boolean);
+}
+
 function findPreviousExercise(exerciseIndex, exerciseName) {
-  const selectedDate = dateEl.value;
-  const entries = getAllWorkouts()
-    .filter(entry => entry.date < selectedDate);
-
-  const sameDay = entries.find(entry => {
-    const ex = entry.exercises?.[exerciseIndex];
-    return entry.day === activeDay && ex && (ex.name === exerciseName || PLAN[activeDay].exercises[exerciseIndex]?.name === exerciseName);
-  });
-
-  if (sameDay) {
-    return {
-      date: sameDay.date,
-      day: sameDay.day,
-      exercise: sameDay.exercises[exerciseIndex]
-    };
-  }
-
-  const sameName = entries.find(entry => {
-    return Object.values(entry.exercises || {}).some(ex => ex?.name === exerciseName);
-  });
-
-  if (sameName) {
-    const exercise = Object.values(sameName.exercises || {}).find(ex => ex?.name === exerciseName);
-    return {
-      date: sameName.date,
-      day: sameName.day,
-      exercise
-    };
-  }
-
-  return null;
-}
-
-function findPreviousWorkoutSameDay() {
-  const selectedDate = dateEl.value;
-  return getAllWorkouts().find(entry => entry.day === activeDay && entry.date < selectedDate) || null;
-}
-
-function getDayStats(workout) {
-  const exercises = Object.values(workout?.exercises || {});
-  let volume = 0;
-  let filled = 0;
-  let fatigueSum = 0;
-  let fatigueCount = 0;
-
-  exercises.forEach(ex => {
-    const stats = getExerciseStats(ex);
-    volume += stats.volume;
-    if (stats.filledSets || stats.fatigue || stats.note) filled += 1;
-    if (Number(ex.fatigue)) {
-      fatigueSum += Number(ex.fatigue);
-      fatigueCount += 1;
-    }
-  });
-
-  return {
-    volume,
-    filled,
-    avgFatigue: fatigueCount ? fatigueSum / fatigueCount : 0
-  };
+  return getExerciseHistory(exerciseIndex, exerciseName)[0] || null;
 }
 
 function deltaClass(delta) {
@@ -243,9 +212,9 @@ function deltaLabel(delta, suffix = "kg") {
 
 function previousLine(exerciseIndex, exerciseName) {
   const prev = findPreviousExercise(exerciseIndex, exerciseName);
-  if (!prev) return "Ultima volta: nessun dato salvato";
+  if (!prev) return "Ultima volta: nessun dato";
 
-  const stats = getExerciseStats(prev.exercise);
+  const stats = prev.stats;
   const fatigue = stats.fatigue ? ` · fatica ${stats.fatigue}/5` : "";
   const top = stats.topWeight ? `${formatKg(stats.topWeight)} × ${stats.topReps || "?"}` : "dato parziale";
   return `Ultima: ${top}${fatigue} · ${formatDate(prev.date)}`;
@@ -269,25 +238,11 @@ function renderTabs() {
 
 function renderHeader() {
   const day = PLAN[activeDay];
-  const current = getDayStats(getWorkout());
-  const previous = findPreviousWorkoutSameDay();
-  const previousStats = previous ? getDayStats(previous) : null;
-  const volumeDelta = previousStats ? current.volume - previousStats.volume : 0;
 
   headerEl.innerHTML = `
     <p class="eyebrow">${day.label}</p>
     <h2>${day.focus}</h2>
-    <p>${day.exercises.length} esercizi · apri un esercizio, compila e confronta con la volta precedente.</p>
-    <div class="day-progress">
-      <div class="progress-box">
-        <span>Volume oggi</span>
-        <strong>${formatVolume(current.volume)}</strong>
-      </div>
-      <div class="progress-box">
-        <span>Vs ultima volta</span>
-        <strong class="${previousStats ? deltaClass(volumeDelta) : "delta-neutral"}">${previousStats ? deltaLabel(Math.round(volumeDelta), "kg") : "nessun dato"}</strong>
-      </div>
-    </div>
+    <p>${day.exercises.length} esercizi · apri solo quello che stai eseguendo.</p>
   `;
 }
 
@@ -296,17 +251,98 @@ function isExerciseFilled(exerciseData) {
   return Boolean(stats.filledSets || stats.fatigue || stats.note);
 }
 
+function fatigueLabel(value) {
+  const labels = {
+    "1": "leggera",
+    "2": "gestibile",
+    "3": "media",
+    "4": "alta",
+    "5": "massima"
+  };
+  return labels[String(value)] || "non indicata";
+}
+
+function setsSummary(sets = []) {
+  const filled = sets
+    .map((set, index) => {
+      const reps = set.reps || "—";
+      const weight = set.weight || "—";
+      const hasData = set.reps || set.weight;
+      return hasData ? `S${index + 1}: ${weight}kg × ${reps}` : null;
+    })
+    .filter(Boolean);
+
+  return filled.length ? filled.join(" · ") : "Nessuna serie compilata";
+}
+
+function renderExerciseHistory(exerciseIndex, exerciseName) {
+  const history = getExerciseHistory(exerciseIndex, exerciseName);
+  const key = historyKey(exerciseIndex);
+  const showAll = expandedHistory[key];
+  const visible = showAll ? history : history.slice(0, 3);
+
+  if (!history.length) {
+    return `
+      <details class="exercise-history">
+        <summary class="history-summary">
+          Storico esercizio
+          <span>0</span>
+        </summary>
+        <div class="history-list">
+          <p class="empty-history">Quando salverai altri allenamenti, li vedrai qui.</p>
+        </div>
+      </details>
+    `;
+  }
+
+  const rows = visible.map(item => {
+    const top = item.stats.topWeight ? `${formatKg(item.stats.topWeight)} × ${item.stats.topReps || "?"}` : "dato parziale";
+    const fatigue = item.stats.fatigue ? `Fatica ${item.stats.fatigue}/5` : "Fatica n.d.";
+    const note = item.stats.note ? `<div class="history-note">${escapeHtml(item.stats.note)}</div>` : "";
+
+    return `
+      <div class="history-row">
+        <div class="history-row-main">
+          <strong>${formatDate(item.date)}</strong>
+          <span>${top} · ${fatigue}</span>
+        </div>
+        <div class="history-row-sets">${escapeHtml(setsSummary(item.exercise.sets))}</div>
+        ${note}
+      </div>
+    `;
+  }).join("");
+
+  const moreButton = history.length > 3
+    ? `<button class="show-more-history" type="button" data-history-toggle="${exerciseIndex}">
+        ${showAll ? "Mostra meno" : `Mostra tutte (${history.length})`}
+      </button>`
+    : "";
+
+  return `
+    <details class="exercise-history">
+      <summary class="history-summary">
+        Storico esercizio
+        <span>${history.length}</span>
+      </summary>
+      <div class="history-list" data-history-list="${exerciseIndex}">
+        ${rows}
+        ${moreButton}
+      </div>
+    </details>
+  `;
+}
+
 function renderExerciseCard(exercise, exerciseIndex, workout) {
   const existing = workout.exercises[exerciseIndex] || {};
   const sets = existing.sets || [];
-  const fatigue = existing.fatigue || "";
+  const fatigue = existing.fatigue || "3";
+  const savedFatigue = existing.fatigue || "";
   const note = existing.note || "";
   const filled = isExerciseFilled(existing);
   const currentStats = getExerciseStats(existing);
   const prev = findPreviousExercise(exerciseIndex, exercise.name);
-  const prevStats = prev ? getExerciseStats(prev.exercise) : null;
+  const prevStats = prev ? prev.stats : null;
   const topDelta = prevStats ? currentStats.topWeight - prevStats.topWeight : 0;
-  const fatigueWidth = fatigue ? `${Number(fatigue) * 20}%` : "0%";
 
   const setRows = Array.from({ length: exercise.sets }).map((_, setIndex) => {
     const set = sets[setIndex] || {};
@@ -337,15 +373,6 @@ function renderExerciseCard(exercise, exerciseIndex, workout) {
     `;
   }).join("");
 
-  const fatigueButtons = [1, 2, 3, 4, 5].map(value => `
-    <button class="fatigue-btn ${Number(fatigue) === value ? "active" : ""}"
-      type="button"
-      data-exercise="${exerciseIndex}"
-      data-fatigue="${value}">
-      ${value}
-    </button>
-  `).join("");
-
   const currentLabel = currentStats.topWeight
     ? `${formatKg(currentStats.topWeight)} × ${currentStats.topReps || "?"}`
     : "non compilato";
@@ -374,7 +401,7 @@ function renderExerciseCard(exercise, exerciseIndex, workout) {
             <strong data-current-top="${exerciseIndex}">${currentLabel}</strong>
           </div>
           <div class="metric-pill">
-            <span>Progressione peso top</span>
+            <span>Vs ultima volta</span>
             <span data-delta="${exerciseIndex}">${progressLabel}</span>
           </div>
         </div>
@@ -384,10 +411,25 @@ function renderExerciseCard(exercise, exerciseIndex, workout) {
         <div class="fatigue-block">
           <div class="fatigue-label">
             <span>Stanchezza percepita</span>
-            <span data-fatigue-text="${exerciseIndex}">${fatigue ? `${fatigue}/5` : "non indicata"}</span>
+            <span class="fatigue-value" data-fatigue-text="${exerciseIndex}">
+              ${savedFatigue ? `${savedFatigue}/5 · ${fatigueLabel(savedFatigue)}` : "non indicata"}
+            </span>
           </div>
-          <div class="fatigue-options">${fatigueButtons}</div>
-          <div class="fatigue-status" data-fatigue-bar="${exerciseIndex}" style="--fatigue-width: ${fatigueWidth};"></div>
+          <div class="fatigue-slider-wrap">
+            <input
+              class="fatigue-slider"
+              type="range"
+              min="1"
+              max="5"
+              step="1"
+              value="${escapeHtml(fatigue)}"
+              data-fatigue-range="${exerciseIndex}"
+              aria-label="Stanchezza percepita ${exercise.name}"
+            />
+            <div class="fatigue-scale" aria-hidden="true">
+              <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+            </div>
+          </div>
         </div>
 
         <textarea
@@ -396,6 +438,8 @@ function renderExerciseCard(exercise, exerciseIndex, workout) {
           data-note="${exerciseIndex}"
           aria-label="Note per ${exercise.name}"
         >${escapeHtml(note)}</textarea>
+
+        ${renderExerciseHistory(exerciseIndex, exercise.name)}
       </div>
     </details>
   `;
@@ -411,18 +455,13 @@ function renderExercises() {
     input.addEventListener("input", () => {
       persistFromUI();
       updateExerciseStats(Number(input.dataset.exercise));
-      renderHeader();
     });
   });
 
-  listEl.querySelectorAll(".fatigue-btn").forEach(button => {
-    button.addEventListener("click", () => {
-      const card = button.closest(".exercise-card");
-      card.querySelectorAll(".fatigue-btn").forEach(btn => btn.classList.remove("active"));
-      button.classList.add("active");
+  listEl.querySelectorAll(".fatigue-slider").forEach(input => {
+    input.addEventListener("input", () => {
       persistFromUI();
-      updateExerciseStats(Number(button.dataset.exercise));
-      renderHeader();
+      updateExerciseStats(Number(input.dataset.fatigueRange));
     });
   });
 
@@ -430,7 +469,16 @@ function renderExercises() {
     input.addEventListener("input", () => {
       persistFromUI();
       updateExerciseStats(Number(input.dataset.note));
-      renderHeader();
+    });
+  });
+
+  listEl.querySelectorAll("[data-history-toggle]").forEach(button => {
+    button.addEventListener("click", () => {
+      const exerciseIndex = Number(button.dataset.historyToggle);
+      const key = historyKey(exerciseIndex);
+      expandedHistory[key] = !expandedHistory[key];
+      persistFromUI();
+      renderExercises();
     });
   });
 }
@@ -453,21 +501,22 @@ function persistFromUI() {
       return { reps, weight };
     });
 
-    const activeFatigue = card.querySelector(".fatigue-btn.active")?.dataset.fatigue || "";
+    const fatigueInput = card.querySelector(`[data-fatigue-range="${exerciseIndex}"]`);
+    const hasFatigueAlready = card.querySelector(`[data-fatigue-text="${exerciseIndex}"]`)?.textContent.includes("/5");
+    const fatigue = fatigueInput && (hasFatigueAlready || fatigueInput.matches(":focus")) ? fatigueInput.value : (getWorkout().exercises?.[exerciseIndex]?.fatigue || "");
     const note = card.querySelector(".note-area")?.value.trim() || "";
 
     workout.exercises[exerciseIndex] = {
       name: exercise.name,
       target: `${exercise.sets}×${exercise.target}`,
       sets,
-      fatigue: activeFatigue,
+      fatigue,
       note
     };
   });
 
   setWorkout(workout);
   updateSavedCount();
-  renderHistory();
 }
 
 function updateExerciseStats(exerciseIndex) {
@@ -476,7 +525,7 @@ function updateExerciseStats(exerciseIndex) {
   const current = workout.exercises[exerciseIndex] || {};
   const currentStats = getExerciseStats(current);
   const prev = findPreviousExercise(exerciseIndex, exercise.name);
-  const prevStats = prev ? getExerciseStats(prev.exercise) : null;
+  const prevStats = prev ? prev.stats : null;
   const topDelta = prevStats ? currentStats.topWeight - prevStats.topWeight : 0;
 
   const topEl = listEl.querySelector(`[data-current-top="${exerciseIndex}"]`);
@@ -499,12 +548,9 @@ function updateExerciseStats(exerciseIndex) {
 
   const fatigueText = listEl.querySelector(`[data-fatigue-text="${exerciseIndex}"]`);
   if (fatigueText) {
-    fatigueText.textContent = currentStats.fatigue ? `${currentStats.fatigue}/5` : "non indicata";
-  }
-
-  const fatigueBar = listEl.querySelector(`[data-fatigue-bar="${exerciseIndex}"]`);
-  if (fatigueBar) {
-    fatigueBar.style.setProperty("--fatigue-width", currentStats.fatigue ? `${Number(currentStats.fatigue) * 20}%` : "0%");
+    fatigueText.textContent = currentStats.fatigue
+      ? `${currentStats.fatigue}/5 · ${fatigueLabel(currentStats.fatigue)}`
+      : "non indicata";
   }
 }
 
@@ -514,7 +560,7 @@ function updateSavedCount() {
     const hasSet = (ex.sets || []).some(set => set.reps || set.weight);
     return hasSet || ex.fatigue || ex.note;
   }).length;
-  savedCountEl.textContent = `${completed} esercizi salvati`;
+  savedCountEl.textContent = `${completed} salvati`;
 }
 
 function clearCurrentDay() {
@@ -523,28 +569,6 @@ function clearCurrentDay() {
   saveStorage(data);
   render();
   showToast("Giorno svuotato");
-}
-
-function renderHistory() {
-  const entries = getAllWorkouts().slice(0, 20);
-  const content = $("#historyContent");
-
-  if (!entries.length) {
-    content.innerHTML = `<p class="exercise-subline">Nessun allenamento salvato.</p>`;
-    return;
-  }
-
-  content.innerHTML = entries.map(entry => {
-    const stats = getDayStats(entry);
-    const day = PLAN[entry.day];
-    const fatigue = stats.avgFatigue ? ` · fatica media ${stats.avgFatigue.toFixed(1).replace(".", ",")}/5` : "";
-    return `
-      <div class="history-item">
-        <strong>${formatDate(entry.date)} · ${day?.label || entry.day} (${day?.focus || ""})</strong>
-        <p>${stats.filled} esercizi compilati · volume ${formatVolume(stats.volume)}${fatigue}</p>
-      </div>
-    `;
-  }).join("");
 }
 
 function escapeHtml(value) {
@@ -560,7 +584,6 @@ function render() {
   renderHeader();
   renderExercises();
   updateSavedCount();
-  renderHistory();
 }
 
 function setupInstallPrompt() {
@@ -602,14 +625,6 @@ function init() {
 
   $("#closeAllBtn").addEventListener("click", () => {
     listEl.querySelectorAll(".exercise-card").forEach(card => card.open = false);
-  });
-
-  $("#toggleHistoryBtn").addEventListener("click", () => {
-    const content = $("#historyContent");
-    const span = $("#toggleHistoryBtn span");
-    content.classList.toggle("hidden");
-    span.textContent = content.classList.contains("hidden") ? "Apri" : "Chiudi";
-    renderHistory();
   });
 
   setupInstallPrompt();

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GymTracker Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { overscroll-behavior-y: none; background-color: #000000; -webkit-font-smoothing: antialiased; }
+        .ios-card { background-color: #1c1c1e; border-radius: 1.25rem; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="text-gray-100 min-h-screen selection:bg-blue-500 selection:text-white" x-data="gymApp()">
+
+    <!-- HEADER -->
+    <header class="ios-card mx-4 mt-4 mb-6 sticky top-4 z-40 bg-opacity-90 backdrop-blur-md border border-white/10 shadow-lg">
+        <div class="px-5 h-16 flex items-center justify-between">
+            <h1 class="text-2xl font-extrabold tracking-tight text-white" x-text="headerTitle"></h1>
+            <button x-show="view !== 'home'" @click="goHome()" class="p-2 text-blue-500 hover:text-blue-400 active:scale-95 transition font-semibold text-lg" x-cloak>
+                Fine
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="px-4 pb-32">
+
+        <!-- ==================== VISTA HOME ==================== -->
+        <div x-show="view === 'home'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-3 ml-2">La tua Split</h2>
+            <div class="space-y-4">
+                <template x-for="workout in workouts" :key="workout.id">
+                    <div class="ios-card p-5 flex items-center justify-between shadow-md border border-white/5">
+                        <div class="flex-1">
+                            <h2 class="text-xl font-bold tracking-tight text-white" x-text="workout.name"></h2>
+                            <p class="text-sm text-gray-400 mt-1 font-medium" x-text="workout.exercises.length + ' esercizi'"></p>
+                        </div>
+                        
+                        <!-- SEZIONE PULSANTI MODIFICATA -->
+                        <div class="flex items-center space-x-5">
+                            <!-- Matita ridotta, senza sfondo e spostata -->
+                            <button @click="editWorkout(workout)" class="p-2 text-gray-600 active:text-gray-400 transition">
+                                <i class="fa-solid fa-pen text-lg"></i>
+                            </button>
+                            <!-- Tasto Play ingrandito -->
+                            <button @click="startWorkout(workout)" class="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center active:bg-blue-500 transition shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                                <i class="fa-solid fa-play text-xl ml-1"></i>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- ==================== VISTA MODIFICA ==================== -->
+        <div x-show="view === 'edit'" x-cloak>
+            <div class="mb-6 ml-2">
+                <h2 class="text-3xl font-extrabold text-white tracking-tight" x-text="editingWorkout.name"></h2>
+                <p class="text-gray-500 text-sm mt-1">Imposta i parametri di base</p>
+            </div>
+
+            <div class="space-y-5 mb-8">
+                <template x-for="(ex, index) in editingWorkout.exercises" :key="index">
+                    <div x-data="{ menuOpen: false }" class="ios-card p-5 border border-white/5 relative">
+                        <!-- Header Esercizio -->
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="w-full pr-10">
+                                <div x-show="!ex._isEditingName" class="flex items-center space-x-2">
+                                    <h4 class="font-bold text-xl tracking-tight text-white" x-text="ex.name || 'Slot Vuoto'"></h4>
+                                    <!-- Matita rimpicciolita -->
+                                    <button @click="ex._isEditingName = true" class="text-gray-600 p-1 opacity-50 active:opacity-100 transition mt-1">
+                                        <i class="fa-solid fa-pen text-[10px]"></i>
+                                    </button>
+                                </div>
+                                <div x-show="ex._isEditingName" class="flex items-center space-x-2">
+                                    <input type="text" x-model="ex.name" placeholder="Nome esercizio" class="w-full bg-black border border-gray-700 rounded-lg px-3 py-1 text-white focus:border-blue-500 outline-none font-bold text-lg">
+                                    <button @click="ex._isEditingName = false" class="text-blue-500 p-2"><i class="fa-solid fa-check"></i></button>
+                                </div>
+                            </div>
+                            
+                            <!-- Menu a tendina eliminazione/aggiunta blocchi -->
+                            <button @click="menuOpen = !menuOpen" class="absolute top-4 right-4 text-gray-400 p-2">
+                                <i class="fa-solid fa-ellipsis-vertical text-lg"></i>
+                            </button>
+                            <div x-show="menuOpen" @click.away="menuOpen = false" x-cloak
+                                 class="absolute right-4 top-12 w-48 bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden z-20"
+                                 x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+                                <button @click="ex.sets++; menuOpen = false" class="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-700 transition"><i class="fa-solid fa-plus mr-2 w-4 text-center"></i> Aggiungi Serie</button>
+                                <button @click="if(ex.sets > 1) ex.sets--; menuOpen = false" class="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-700 transition border-b border-gray-700"><i class="fa-solid fa-minus mr-2 w-4 text-center"></i> Rimuovi Serie</button>
+                                <button @click="removeExercise(index); menuOpen = false" class="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-gray-700 transition font-semibold"><i class="fa-solid fa-trash mr-2 w-4 text-center"></i> Rimuovi Esercizio</button>
+                            </div>
+                        </div>
+
+                        <!-- Parametri Modifica -->
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="bg-black rounded-xl p-2 border border-gray-800">
+                                <label class="text-[10px] text-gray-500 font-bold uppercase block text-center mb-1">Serie Base</label>
+                                <input type="number" x-model.number="ex.sets" class="w-full bg-transparent text-center font-bold text-xl text-white focus:outline-none">
+                            </div>
+                            <div class="bg-black rounded-xl p-2 border border-gray-800">
+                                <label class="text-[10px] text-gray-500 font-bold uppercase block text-center mb-1">Reps Base</label>
+                                <input type="number" x-model.number="ex.reps" class="w-full bg-transparent text-center font-bold text-xl text-white focus:outline-none">
+                            </div>
+                            <div class="bg-black rounded-xl p-2 border border-gray-800">
+                                <label class="text-[10px] text-gray-500 font-bold uppercase block text-center mb-1">Rec Obiettivo(s)</label>
+                                <input type="number" x-model.number="ex.rest" class="w-full bg-transparent text-center font-bold text-xl text-white focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                
+                <button @click="addExercise()" class="w-full border-2 border-dashed border-gray-700 text-gray-400 font-semibold py-4 rounded-xl active:bg-gray-900 transition flex items-center justify-center">
+                    <i class="fa-solid fa-plus mr-2"></i> Aggiungi nuovo esercizio
+                </button>
+            </div>
+
+            <button @click="saveWorkout()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl text-lg shadow-lg active:scale-95 transition tracking-wide">
+                Fine Modifica
+            </button>
+        </div>
+
+        <!-- ==================== VISTA ALLENAMENTO ATTIVO ==================== -->
+        <div x-show="view === 'active'" x-cloak>
+            <div class="space-y-6">
+                <template x-for="(ex, exIndex) in activeSession.exercises" :key="exIndex">
+                    <div class="ios-card p-4 lg:p-5 border border-white/5">
+                        
+                        <!-- Header Esercizio & Statistiche -->
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-2xl font-bold tracking-tight text-white" x-text="ex.name || 'Esercizio'"></h3>
+                            <button @click="openProgress(ex.name)" class="w-10 h-10 flex items-center justify-center rounded-full bg-blue-900/30 text-blue-500 active:bg-blue-900/50 transition shadow-inner">
+                                <i class="fa-solid fa-chart-line text-lg"></i>
+                            </button>
+                        </div>
+
+                        <!-- Intestazione Tabella Flex per adattabilità mobile -->
+                        <div class="flex gap-1 text-[9px] sm:text-[10px] text-gray-500 font-bold uppercase tracking-widest text-center mb-3 px-1">
+                            <div class="w-5">#</div>
+                            <div class="flex-1">Kg</div>
+                            <div class="flex-1">Reps</div>
+                            <div class="flex-1">Rec(s)</div>
+                            <div class="w-20">Azione</div>
+                        </div>
+
+                        <!-- Righe Serie -->
+                        <div class="space-y-3">
+                            <template x-for="(set, setIndex) in ex.setsData" :key="setIndex">
+                                <div class="flex gap-1.5 sm:gap-2 items-center" :class="set.done ? 'opacity-50 grayscale' : 'opacity-100'">
+                                    
+                                    <!-- Numero Set -->
+                                    <div class="w-5 text-center text-gray-500 font-bold text-sm sm:text-lg" x-text="setIndex + 1"></div>
+                                    
+                                    <!-- KG -->
+                                    <div class="flex-1">
+                                        <input type="number" step="0.5" x-model="set.kg" :disabled="set.done" class="w-full bg-black border border-gray-800 rounded-lg py-3 text-center text-white text-base sm:text-lg font-bold focus:outline-none focus:border-blue-500 transition disabled:bg-transparent">
+                                    </div>
+                                    
+                                    <!-- REPS -->
+                                    <div class="flex-1">
+                                        <input type="number" x-model="set.reps" :disabled="set.done" class="w-full bg-black border border-gray-800 rounded-lg py-3 text-center text-white text-base sm:text-lg font-bold focus:outline-none focus:border-blue-500 transition disabled:bg-transparent">
+                                    </div>
+
+                                    <!-- RECUPERO (Scritto dal cronometro o manuale) -->
+                                    <div class="flex-1">
+                                        <input type="number" x-model="set.rest" :disabled="set.done" placeholder="-" class="w-full bg-black border border-gray-800 rounded-lg py-3 text-center text-blue-400 text-base sm:text-lg font-bold focus:outline-none focus:border-blue-500 transition disabled:bg-transparent placeholder-gray-700">
+                                    </div>
+                                    
+                                    <!-- PULSANTI (Cronometro + Fatto) -->
+                                    <div class="w-20 flex gap-1 justify-between">
+                                        <button @click="startStopwatch(exIndex, setIndex)" class="w-9 h-11 sm:w-10 sm:h-12 rounded-lg bg-blue-900/20 border border-blue-500/30 text-blue-400 flex items-center justify-center active:bg-blue-900/50 transition shrink-0">
+                                            <i class="fa-solid fa-stopwatch text-sm"></i>
+                                        </button>
+                                        <button @click="set.done = !set.done" class="w-9 h-11 sm:w-10 sm:h-12 rounded-lg flex items-center justify-center transition-all duration-200 shrink-0"
+                                            :class="set.done ? 'bg-blue-500 text-white' : 'bg-gray-800 text-gray-400 active:bg-gray-700'">
+                                            <i class="fa-solid fa-check text-sm sm:text-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Pulsante opzionale aggiunta serie (bassa gerarchia visiva) -->
+                        <div class="mt-4 flex justify-center">
+                            <button @click="ex.setsData.push({ kg: '', reps: ex.reps, rest: '', done: false })" class="text-xs font-semibold text-gray-600 hover:text-gray-400 active:scale-95 transition py-2 px-4 rounded-full border border-gray-800">
+                                + Aggiungi serie
+                            </button>
+                        </div>
+
+                    </div>
+                </template>
+
+                <button @click="finishWorkout()" class="w-full mt-6 bg-blue-600 text-white font-extrabold py-5 rounded-2xl text-xl shadow-[0_0_20px_rgba(37,99,235,0.3)] active:scale-95 transition tracking-wide">
+                    Salva allenamento
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MODALE STORICO PROGRESSI -->
+    <div x-show="progressModal.open" x-cloak class="fixed inset-0 z-50 flex flex-col justify-end">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="progressModal.open = false" x-transition.opacity></div>
+        <div class="ios-card rounded-b-none p-5 relative z-10 w-full h-[85vh] flex flex-col"
+             x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0"
+             x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-y-0" x-transition:leave-end="translate-y-full">
+            
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Analisi Prestazioni</h2>
+                    <h3 class="text-xl font-extrabold text-white tracking-tight mt-1" x-text="progressModal.exName"></h3>
+                </div>
+                <button @click="progressModal.open = false" class="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-gray-400">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Legenda Colori -->
+            <div class="flex space-x-3 mb-4 text-[10px] font-bold text-gray-500 uppercase justify-center">
+                <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-1"></span>Progresso</span>
+                <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-gray-600 mr-1"></span>Stabile</span>
+                <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-red-500 mr-1"></span>Regresso</span>
+            </div>
+
+            <div class="flex-1 overflow-y-auto pb-8">
+                <template x-if="progressModal.history.length === 0">
+                    <p class="text-gray-500 text-center mt-10 text-sm">Nessun dato registrato finora.</p>
+                </template>
+
+                <template x-for="record in progressModal.history" :key="record.date">
+                    <div class="bg-black border rounded-xl overflow-hidden mb-4 transition-all" 
+                         :class="{
+                             'border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]': record.status === 'progresso',
+                             'border-red-500/50': record.status === 'regresso',
+                             'border-gray-800': record.status === 'neutral'
+                         }">
+                        
+                        <div class="px-4 py-2 border-b text-sm font-bold flex justify-between items-center" 
+                             :class="{
+                                 'bg-green-500/10 text-green-400 border-green-500/30': record.status === 'progresso',
+                                 'bg-red-500/10 text-red-400 border-red-500/30': record.status === 'regresso',
+                                 'bg-gray-900 text-gray-400 border-gray-800': record.status === 'neutral'
+                             }">
+                            <span x-text="record.date"></span>
+                            <span>
+                                <i x-show="record.status === 'progresso'" class="fa-solid fa-arrow-trend-up"></i>
+                                <i x-show="record.status === 'regresso'" class="fa-solid fa-arrow-trend-down"></i>
+                                <i x-show="record.status === 'neutral'" class="fa-solid fa-minus"></i>
+                            </span>
+                        </div>
+                        
+                        <div class="p-2">
+                            <div class="flex text-[10px] text-gray-500 font-bold uppercase text-center mb-2 px-2">
+                                <div class="w-8">Set</div>
+                                <div class="flex-1">Kg</div>
+                                <div class="flex-1">Reps</div>
+                                <div class="flex-1">Rec</div>
+                            </div>
+                            <div class="space-y-1">
+                                <template x-for="(s, idx) in record.sets">
+                                    <div class="flex text-sm text-white text-center py-1.5 bg-gray-900/30 rounded-lg px-2 items-center">
+                                        <div class="w-8 text-gray-500 font-bold" x-text="idx+1"></div>
+                                        <div class="flex-1 font-bold" x-text="s.kg ? s.kg : '-'"></div>
+                                        <div class="flex-1 font-bold" x-text="s.reps ? s.reps : '-'"></div>
+                                        <div class="flex-1 text-gray-400" x-text="s.rest ? s.rest + 's' : '-'"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- FLOATING CRONOMETRO -->
+    <div x-show="stopwatch.active" x-cloak
+         x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0" 
+         x-transition:leave="transition ease-in duration-300" x-transition:leave-start="translate-y-0" x-transition:leave-end="translate-y-full"
+         class="fixed bottom-0 left-0 right-0 ios-card rounded-b-none border-t border-blue-500/30 p-5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.9)] flex items-center justify-between backdrop-blur-2xl bg-black/80">
+        <div class="flex items-center space-x-5">
+            <div class="w-14 h-14 rounded-full bg-blue-900/20 flex items-center justify-center border-4 border-blue-500 relative">
+                <i class="fa-solid fa-stopwatch text-blue-500 animate-pulse text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-[11px] text-gray-400 uppercase font-bold tracking-widest flex items-center">
+                    Cronometro attivo <span class="ml-2 w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
+                </p>
+                <p class="text-4xl font-extrabold tracking-tighter text-white font-mono" x-text="formatTime(stopwatch.seconds)"></p>
+            </div>
+        </div>
+        <button @click="stopAndSaveStopwatch()" class="w-14 h-14 bg-blue-600 rounded-full text-white flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.5)] active:scale-95 transition">
+            <i class="fa-solid fa-check text-2xl"></i>
+        </button>
+    </div>
+
+    <script>
+        function gymApp() {
+            return {
+                view: 'home', 
+                workouts: [],
+                history: [],
+                
+                editingWorkout: { id: null, name: '', exercises: [] },
+                activeSession: null,
+                
+                stopwatch: { active: false, seconds: 0, interval: null, currentEx: null, currentSet: null },
+                
+                progressModal: { open: false, exName: '', history: [] },
+
+                init() {
+                    const savedW = localStorage.getItem('gym_workouts_v4');
+                    if(savedW) {
+                        this.workouts = JSON.parse(savedW);
+                    } else {
+                        const days = ['A', 'B', 'C', 'D'];
+                        this.workouts = days.map((letter, index) => {
+                            return {
+                                id: Date.now() + index, 
+                                name: `Giorno ${letter}`,
+                                exercises: Array.from({length: 6}).map((_, i) => ({
+                                    name: `Esercizio ${i+1}`,
+                                    sets: 4, reps: 8, rest: 90,
+                                    _isEditingName: false
+                                }))
+                            };
+                        });
+                    }
+
+                    const savedH = localStorage.getItem('gym_history_v4');
+                    if(savedH) this.history = JSON.parse(savedH);
+
+                    this.$watch('workouts', val => localStorage.setItem('gym_workouts_v4', JSON.stringify(val)));
+                    this.$watch('history', val => localStorage.setItem('gym_history_v4', JSON.stringify(val)));
+                },
+
+                get headerTitle() {
+                    if (this.view === 'home') return 'Allenamenti';
+                    if (this.view === 'edit') return 'Modifica';
+                    if (this.view === 'active') return this.activeSession.name;
+                    return 'GymApp';
+                },
+
+                goHome() {
+                    if(this.view === 'active') {
+                        if(!confirm("Uscire? I progressi non salvati di questa sessione verranno persi.")) return;
+                    }
+                    this.stopwatch.active = false;
+                    clearInterval(this.stopwatch.interval);
+                    this.view = 'home';
+                },
+
+                editWorkout(workout) {
+                    this.editingWorkout = JSON.parse(JSON.stringify(workout));
+                    this.editingWorkout.exercises.forEach(ex => ex._isEditingName = false);
+                    this.view = 'edit';
+                },
+                addExercise() {
+                    this.editingWorkout.exercises.push({
+                        name: `Nuovo Esercizio`, sets: 4, reps: 8, rest: 90, _isEditingName: false
+                    });
+                },
+                removeExercise(index) { this.editingWorkout.exercises.splice(index, 1); },
+                saveWorkout() {
+                    const index = this.workouts.findIndex(w => w.id === this.editingWorkout.id);
+                    if (index >= 0) this.workouts[index] = this.editingWorkout;
+                    this.view = 'home';
+                },
+
+                startWorkout(workout) {
+                    let sessionExercises = workout.exercises.map(ex => {
+                        let setsData = [];
+                        for(let i=0; i<ex.sets; i++) {
+                            setsData.push({ kg: '', reps: ex.reps, rest: '', done: false });
+                        }
+                        return { ...ex, setsData };
+                    });
+
+                    this.activeSession = {
+                        workoutId: workout.id,
+                        name: workout.name,
+                        date: new Date().toISOString(),
+                        exercises: sessionExercises
+                    };
+                    this.view = 'active';
+                },
+                
+                finishWorkout() {
+                    if(confirm("Vuoi terminare e salvare l'allenamento nel tuo storico?")) {
+                        this.history.push(this.activeSession);
+                        this.stopwatch.active = false;
+                        clearInterval(this.stopwatch.interval);
+                        this.view = 'home';
+                    }
+                },
+
+                openProgress(exName) {
+                    if(!exName) return;
+                    this.progressModal.exName = exName;
+                    
+                    let allSessionsForEx = [];
+                    
+                    for (let i = 0; i < this.history.length; i++) {
+                        let session = this.history[i];
+                        let ex = session.exercises.find(e => e.name.toLowerCase() === exName.toLowerCase());
+                        if (ex) {
+                            let doneSets = ex.setsData.filter(s => s.done && s.kg !== '');
+                            if (doneSets.length > 0) {
+                                allSessionsForEx.push({ dateObj: new Date(session.date), sets: doneSets });
+                            }
+                        }
+                    }
+
+                    let results = [];
+                    for (let i = 0; i < allSessionsForEx.length; i++) {
+                        let curr = allSessionsForEx[i];
+                        let status = 'neutral'; 
+
+                        if (i > 0) {
+                            let prev = allSessionsForEx[i-1];
+
+                            let currVol = curr.sets.reduce((sum, s) => sum + (parseFloat(s.kg || 0) * parseInt(s.reps || 0)), 0);
+                            let prevVol = prev.sets.reduce((sum, s) => sum + (parseFloat(s.kg || 0) * parseInt(s.reps || 0)), 0);
+
+                            let currRestAvg = curr.sets.reduce((sum, s) => sum + (parseInt(s.rest) || 0), 0) / curr.sets.length;
+                            let prevRestAvg = prev.sets.reduce((sum, s) => sum + (parseInt(s.rest) || 0), 0) / prev.sets.length;
+
+                            if (currVol > prevVol) {
+                                status = 'progresso';
+                            } else if (currVol < prevVol) {
+                                status = 'regresso';
+                            } else {
+                                if (currRestAvg > 0 && prevRestAvg > 0) {
+                                    if (currRestAvg < prevRestAvg) status = 'progresso'; 
+                                    else if (currRestAvg > prevRestAvg) status = 'regresso';
+                                }
+                            }
+                        }
+
+                        results.push({
+                            date: curr.dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }),
+                            status: status,
+                            sets: curr.sets
+                        });
+                    }
+                    
+                    this.progressModal.history = results.reverse();
+                    this.progressModal.open = true;
+                },
+
+                startStopwatch(exIdx, setIdx) {
+                    clearInterval(this.stopwatch.interval);
+                    this.stopwatch.seconds = 0;
+                    this.stopwatch.currentEx = exIdx;
+                    this.stopwatch.currentSet = setIdx;
+                    this.stopwatch.active = true;
+                    
+                    this.stopwatch.interval = setInterval(() => {
+                        this.stopwatch.seconds++;
+                    }, 1000);
+                },
+                
+                stopAndSaveStopwatch() {
+                    if(this.stopwatch.currentEx !== null && this.stopwatch.currentSet !== null) {
+                        this.activeSession.exercises[this.stopwatch.currentEx].setsData[this.stopwatch.currentSet].rest = this.stopwatch.seconds;
+                    }
+                    this.stopwatch.active = false;
+                    clearInterval(this.stopwatch.interval);
+                    this.stopwatch.currentEx = null;
+                    this.stopwatch.currentSet = null;
+                },
+                
+                formatTime(secNum) {
+                    let m = Math.floor(secNum / 60);
+                    let s = secNum % 60;
+                    return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
